@@ -1,0 +1,70 @@
+defaults: &defaults
+  docker:
+    - image: circleci/ruby:2.4.2-node-browsers
+  working_directory: ~/repo
+
+  steps:
+    - checkout
+
+    # Download and cache dependencies
+    - restore_cache:
+        keys:
+        - v1-dependencies-{{ checksum "Gemfile.lock" }}
+        # fallback to using the latest cache if no exact match is found
+        - v1-dependencies-
+
+    - run:
+        name: install dependencies
+        command: |
+          bundle install --jobs=4 --retry=3 --path vendor/bundle
+
+    - save_cache:
+        paths:
+          - ./vendor/bundle
+        key: v1-dependencies-{{ checksum "Gemfile.lock" }}
+
+    - run:
+        name: dsa
+        command: |
+          bundle exec chromedriver-update 2.28
+
+    # run tests!
+    - run:
+        name: run tests
+        command: |
+          bundle exec ruby run_test.rb
+
+version: 2
+jobs:
+  build:
+    <<: *defaults
+  raptor:
+    <<: *defaults
+  bomar:
+    <<: *defaults
+
+workflows:
+  version: 2
+  test1:
+    jobs:
+      - raptor
+    triggers:
+      - schedule:
+          cron: "50 1,6,15,20 * * *"
+          filters:
+            branches:
+              only:
+                - master
+  test2:
+    jobs:
+      - bomar
+    triggers:
+      - schedule:
+          cron: "15 3,8,17 * * *"
+          filters:
+            branches:
+              only:
+                - master
+  commit:
+    jobs:
+      - bomar
